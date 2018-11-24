@@ -108,6 +108,54 @@ func sample(probabilities map[string]float64) (string) {
 	return ""
 }
 
+func findLargestConnectedSubgraph(transactions []Transaction) ([]Transaction) {
+	// graphs maps connected sender/recipient addresses to numbered subgraphs, starting at 1
+	graphs := make(map[string]int)
+	nextGraph := 1
+
+	for _, t := range transactions {
+		if graphs[t.sender] != 0 && graphs[t.recipient] != 0 {
+			graphs[t.recipient] = graphs[t.sender]
+		} else if graphs[t.sender] == 0 && graphs[t.recipient] != 0 {
+			graphs[t.sender] = graphs[t.recipient]
+		} else if graphs[t.sender] == 0 && graphs[t.recipient] == 0 {
+			graphs[t.sender] = nextGraph
+			graphs[t.recipient] = nextGraph
+			nextGraph++
+		}
+	}
+
+	largestGraphNodes := make(map[string]bool)
+	largestGraphSize := 0
+
+	for i := 1; i < nextGraph; i++ {
+		graphSize := 0
+		nodes := make(map[string]bool)
+
+		for node, graph := range graphs {
+			if graph == i {
+				nodes[node] = true
+				graphSize++
+			}
+		}
+
+		if graphSize > largestGraphSize {
+			largestGraphSize = graphSize
+			largestGraphNodes = nodes
+		}
+	}
+
+	var subgraphTransactions []Transaction
+
+	for _, t := range transactions {
+		if largestGraphNodes[t.sender] || largestGraphNodes[t.recipient] {
+			subgraphTransactions = append(subgraphTransactions, t)
+		}
+	}
+
+	return subgraphTransactions
+}
+
 func main() {
 	iterations := 5000
 
@@ -139,8 +187,11 @@ func main() {
 	recipientProbabilitiesGivenSenderAmount, senderProbabilitiesGivenRecipientAmount, amountProbabilitiesGivenSenderRecipient := generateDependentDistributions(transactions)
 
 	var sampledTransactions []Transaction
+	subgraphTransactions := findLargestConnectedSubgraph(transactions)
 
-	sampledTransactions = append(sampledTransactions, transactions[rand.Intn(len(transactions) - 1)])
+	//fmt.Printf("Largest subgraph has %d transactions\n", len(subgraphTransactions))
+
+	sampledTransactions = append(sampledTransactions, subgraphTransactions[rand.Intn(len(transactions) - 1)])
 
 	for n := 1; n < iterations; n++ {
 		sender := sample(senderProbabilitiesGivenRecipientAmount[strings.Join([]string { sampledTransactions[n-1].recipient, sampledTransactions[n-1].amount }, "")]);
